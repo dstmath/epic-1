@@ -3,7 +3,7 @@
 
 [中文文档入口](README_cn.md "中文")
 
-# What is it?
+What is it?
 -----------
 
 Epic is the continution of [Dexposed](https://github.com/alibaba/dexposed) on ART.
@@ -36,7 +36,7 @@ Gradle dependency like following(jcenter):
 
 ```groovy
 dependencies {
-    compile 'me.weishu:epic:0.2.2'
+    compile 'me.weishu:epic:0.2.3'
 }
 ```
 
