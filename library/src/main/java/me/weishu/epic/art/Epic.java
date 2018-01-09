@@ -45,9 +45,9 @@ public final class Epic {
 
     private static final Map<String, ArtMethod> backupMethodsMapping = new ConcurrentHashMap<>();
 
-    private static final Map<Long, MethodInfo> originSigs = new HashMap<>();
+    private static final Map<Long, MethodInfo> originSigs = new ConcurrentHashMap<>();
 
-    private static final Map<String, Trampoline> scripts = new HashMap<>();
+    private static final Map<Long, Trampoline> scripts = new HashMap<>();
     private static ShellCode ShellCode;
 
     static {
@@ -104,16 +104,19 @@ public final class Epic {
         methodInfo.method = artOrigin;
         originSigs.put(artOrigin.getAddress(), methodInfo);
 
+        if (!artOrigin.isAccessible()) {
+            artOrigin.setAccessible(true);
+        }
+
         artOrigin.ensureResolved();
 
-        String identifier = artOrigin.getIdentifier();
-
-        final long originEntry = artOrigin.getEntryPointFromQuickCompiledCode();
+        long originEntry = artOrigin.getEntryPointFromQuickCompiledCode();
         if (originEntry == ArtMethod.getQuickToInterpreterBridge()) {
             Logger.w(TAG, "this method is not compiled, compile it now. current entry: 0x" + Long.toHexString(originEntry));
             boolean ret = artOrigin.compile();
             if (ret) {
-                Logger.i(TAG, "compile method success, new entry: 0x" + Long.toHexString(artOrigin.getEntryPointFromQuickCompiledCode()));
+                originEntry = artOrigin.getEntryPointFromQuickCompiledCode();
+                Logger.i(TAG, "compile method success, new entry: 0x" + Long.toHexString(originEntry));
             } else {
                 Logger.e(TAG, "compile method failed...");
                 return false;
@@ -131,14 +134,18 @@ public final class Epic {
             setBackMethod(artOrigin, backupMethod);
         }
 
-        if (!scripts.containsKey(identifier)) {
-            scripts.put(identifier, new Trampoline(ShellCode, artOrigin));
+        final long key = originEntry;
+        final EntryLock lock = EntryLock.obtain(originEntry);
+        //noinspection SynchronizationOnLocalVariableOrMethodParameter
+        synchronized (lock) {
+            if (!scripts.containsKey(key)) {
+                scripts.put(key, new Trampoline(ShellCode, originEntry));
+            }
+            Trampoline trampoline = scripts.get(key);
+            boolean ret = trampoline.install(artOrigin);
+            // Logger.d(TAG, "hook Method result:" + ret);
+            return ret;
         }
-        Trampoline trampoline = scripts.get(identifier);
-
-        boolean ret = trampoline.install();
-        Logger.d(TAG, "hook Method result:" + ret);
-        return ret;
     }
 
     /*
@@ -209,6 +216,20 @@ public final class Epic {
         @Override
         public String toString() {
             return method.toGenericString();
+        }
+    }
+
+    private static class EntryLock {
+        static Map<Long, EntryLock> sLockPool = new HashMap<>();
+
+        static synchronized EntryLock obtain(long entry) {
+            if (sLockPool.containsKey(entry)) {
+                return sLockPool.get(entry);
+            } else {
+                EntryLock entryLock = new EntryLock();
+                sLockPool.put(entry, entryLock);
+                return entryLock;
+            }
         }
     }
 }
