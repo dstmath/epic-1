@@ -257,7 +257,7 @@ public final class DexposedBridge {
 				Object result = method.invoke(thisObject, args);
 				param.setResult(result);
 			} catch (Exception e) {
-				log(e);
+				// log(e); origin throw exception is normal.
 				param.setThrowable(e);
 			}
 		}
@@ -289,12 +289,12 @@ public final class DexposedBridge {
 				final Throwable cause = throwable.getCause();
 
 				// We can not change the exception flow of origin call, rethrow
-				Logger.e(TAG, "origin call throw exception (not a real crash, just record for debug):", cause);
+				// Logger.e(TAG, "origin call throw exception (not a real crash, just record for debug):", cause);
 				DexposedBridge.<RuntimeException>throwNoCheck(param.getThrowable().getCause(), null);
 				return null; //never reach.
 			} else {
 				// the exception cause by epic self, just log.
-				Logger.w(TAG, "epic cause exception in call bridge!!");
+				Logger.e(TAG, "epic cause exception in call bridge!!", throwable);
 			}
 			return null; // never reached.
 		} else {
